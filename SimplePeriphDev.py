@@ -39,8 +39,7 @@ class SimplePeriphDev:
 
     def change_parameter(self, parameter, value):
         """
-        Should only be used to change controllable parameters. Validation is performed on the end device
-        To get device's full status use self.__request_status
+        Should only be used to change controllable parameters.
         :param parameter: Parameter to be changed
         :param value: Value to be assigned to the specified parameter
         :return:
