@@ -39,7 +39,7 @@ class SimplePeriphDev:
 
     def change_parameter(self, parameter, value):
         """
-        Should only be used to change controllable parameters.
+        Changes a controllable parameter to value. Calls self.error_handler if error has occured during this procedure
         :param parameter: Parameter to be changed
         :param value: Value to be assigned to the specified parameter
         :return:
