@@ -21,18 +21,23 @@ class SimplePeriphDev:
         self.online = False
         # Threading lock for multithreading. Locks whenever the work with the device is in progress
         self.lock = threading.Lock()
-        self.notification_handler = self.default_notification_handler
+        # Function. Called when device's characteristics update
+        self.update_handler = self.default_update_handler
+        # Function. Called when a device encounters an error (e.g. could not recognize command)
+        self.error_handler = self.default_error_handler
         self.state = {}
 
     # Sends ASCII text to the device.
     def __send_text(self, text: str):
         raise NotImplementedError
 
-    def default_notification_handler(self, device, parameter, value):
-        logging.info('Default notification handler called for device "{}".'
-        'Parameter: "{}", Value: "{}"'.format(device, parameter, value))
+    def default_update_handler(self, device):
+        logging.info('Default update handler has been called for "{}" device'.format(device))
 
-    def send_command(self, parameter, value):
+    def default_error_handler(self, device):
+        logging.info('Default error handler has been called for "{}" device'.format(device))
+
+    def change_parameter(self, parameter, value):
         """
         Should only be used to change controllable parameters. Validation is performed on the end device
         To get device's full status use self.__request_status
@@ -43,12 +48,6 @@ class SimplePeriphDev:
         # Let's check if we need to transfer any text or the parameter is already in the requested state
         if self.state[parameter] == value:
             self.__send_text('{}:{}'.format(parameter, value))
-
-    def __reqest_status(self):
-        """
-        Needed for self.state initialization
-        :return:
-        """
 
     def __str__(self):
         return self.online
@@ -62,16 +61,15 @@ class SimpleBlePeriphDev(SimplePeriphDev):
     bleModuleSerialCharHandle = 0x025
     bleModuleSerialCharUUID = '0000ffe1-0000-1000-8000-00805f9b34fb'
 
-    # notification_handler is a function that is going to be called if the device sends a notification
+    # update_handler is a function that is going to be called if the device sends a notification
     def __init__(self, description, ble_adapter):
         super(SimpleBlePeriphDev, self).__init__(description)
-        self.notification_handler = self.default_notification_handler
         self.MAC = description['MAC']
         self.ble_adapter = ble_adapter
         self.conn = None
-        self.connect()
+        self.__connect()
 
-    def connect(self, timeout=5):
+    def __connect(self, timeout=5):
         """
         try connecting to the device
         :param timeout: timeout in seconds
@@ -80,7 +78,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         try:
             self.conn = self.ble_adapter.connect(self.MAC, timeout)
             self.online = True
-            self.conn.subscribe(uuid=self.bleModuleSerialCharUUID, callback=self.handle_notification, indication=True)
+            self.conn.subscribe(uuid=self.bleModuleSerialCharUUID, callback=self.__handle_notification, indication=True)
             return True
         except pygatt.exceptions.NotConnectedError:
             return False
@@ -93,7 +91,13 @@ class SimpleBlePeriphDev(SimplePeriphDev):
                                  wait_for_response=False)
         logging.debug('To dev {} sent "{}"'.format(self, text))
 
-    def handle_notification(self, handle, value):
+    def __handle_notification(self, handle, value):
+        """
+        Called when a BLE device sends a notification
+        :param handle:
+        :param value:
+        :return:
+        """
         # Consider locking less code <efficiency>
         stringified_data = value.decode('ASCII')
         logging.debug('PeriphDev {} notif raw: "{}"'.format(self, stringified_data))
@@ -108,9 +112,13 @@ class SimpleBlePeriphDev(SimplePeriphDev):
             logging.error('Incorrect format. New parameter value is empty.'
                           'Device {} sent: "{}"'.format(self, stringified_data))
         else:
-            parameter_name = stringified_data[:separation_pos]
-            parameter_value = stringified_data[separation_pos + 1:]
-            self.notification_handler(device=self, parameter=parameter_name, value=parameter_value)
+            self.notification_handler(device=self, message=stringified_data)
+
+    def __reqest_status(self):
+        """
+        Needed for self.state initialization.
+        :return:
+        """
 
     def __str__(self):
         return self.name
@@ -132,8 +140,8 @@ class SimpleStubPeriphDev (SimplePeriphDev):
     def __send_text(self, text: str):
         logging.warning('Stub device "{}" just got "{}"'.format(self, text))
 
-    def imitate_notification(self, parameter: str, value: str):
-        self.notification_handler(device=self, parameter=parameter, value=value)
+    def imitate_notification(self, message: str):
+        self.update_handler(device=self, message=message)
 
 class SimpleStubPeriphDev_well_and_tank (SimpleStubPeriphDev):
     def __init__(self, description):

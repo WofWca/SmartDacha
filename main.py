@@ -92,7 +92,7 @@ if __name__ == '__main__':
         # Retry connecting to devices that are offline
         for curr_dev in periph_devices.values():
             if curr_dev.online == False:
-                connection_result = curr_dev.connect(retry_connection_tiemout)
+                connection_result = curr_dev.__connect(retry_connection_tiemout)
                 if connection_result == True:
                     logging.info('%s connection retry succeeded', curr_dev)
                 else:

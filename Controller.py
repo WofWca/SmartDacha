@@ -18,7 +18,7 @@ class Controller:
         # Telling devices to send notification to this controller then requesting their states
         # Their responses will be handled in a different function
         for curr_dev in self.periph_devices.values():
-            curr_dev.notification_handler = self.handle_device_notification
+            curr_dev.update_handler = self.handle_device_update
         self.config_lock = Lock()
         # Initialize config variable.
         # Mutex could be used here. But no need in it - it's an __init__ function, which means nothing can access an
@@ -77,18 +77,23 @@ class Controller:
         :return:
         """
 
-    def handle_device_notification(self, device: SimplePeriphDev, parameter: str, value: str):
+    def handle_device_update(self, device: SimplePeriphDev):
         """
-        Handles a device notification
-        :param parameter:
+        Called when a device's characteristic has been updated
+        :param message: Device's message. Format:
+        <notification_type>[:<arguments>]
+        <notification_type> can be: "UPD" or "ERR"
+        "UPD" is used to transfer information about characteristic udpates
+        if the <notification_type> is "UPD", <arguments> must have the following format:
+        <param>:<val>
         :param device: Device which send that notification
-        :param value: The value of the specifiend characteristic
         :return:
         """
-        print('controller.handle_device_notification called')
+
 
     def handle_update(self, update):
         """
+        Called when something changes its state (e.g. controller config or device)
         :param update: Update JSON-formatted data (not string, JSON-like Python data structure)
         :return:
         """
@@ -116,22 +121,22 @@ class Controller:
                         with self.pump_dev.lock:
                             if self.pump_dev.state['well_water_presence'] == 'not_present':
                                 # No water in the well
-                                self.pump_dev.send_command('pump', 'turn_off')
+                                self.pump_dev.change_parameter('pump', 'turn_off')
                             else:
                                 # Water in the well is present
                                 if self.config['pump_auto_control_turn_off_when_tank_full']:
                                     if self.pump_dev.state['tank'] == 'full':
-                                        self.pump_dev.send_command('pump', 'turn_off')
+                                        self.pump_dev.change_parameter('pump', 'turn_off')
                                     else:
-                                        self.pump_dev.send_command('pump', 'turn_on')
+                                        self.pump_dev.change_parameter('pump', 'turn_on')
                     else:
                         # Do not turn off the pump if the well is empty
                         with self.pump_dev.lock:
                             if self.config['pump_auto_control_turn_off_when_tank_full']:
                                 if self.pump_dev.state['tank'] == 'full':
-                                    self.pump_dev.send_command('pump', 'turn_off')
+                                    self.pump_dev.change_parameter('pump', 'turn_off')
                                 else:
-                                    self.pump_dev.send_command('tank', 'turn_on')
+                                    self.pump_dev.change_parameter('pump', 'turn_on')
                             else:
                                 # Do not trun off the pump when the tank is full
-                                self.pump_dev.send_command('pump', 'turn_on')
+                                self.pump_dev.change_parameter('pump', 'turn_on')
