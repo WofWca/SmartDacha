@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Умная дача</title>
+	<style>
+		* {
+			font-family: Arial;
+		}
+
+		.control_panel {
+			margin: auto;
+			vertical-align: middle;
+			max-width: 500px;
+		}
+
+		.group {
+			background-color: honeydew;
+			margin: 5px;
+			padding: 5px;
+			border-radius: 2px;
+		}
+
+		.group_header {
+			margin-top: 5px;
+			margin-bottom: 5px;
+		}
+
+		.parameter {
+			overflow: auto;
+			padding: 5px;
+			margin: 5px;
+			vertical-align: middle;
+			border-radius: 2px;
+			background-color: gainsboro;
+		}
+
+		.parameter_name {
+			margin: 0 auto;
+			display: inline-flex;
+		}
+
+		.parameter_curr_state_and_command {
+			display: inline-flex;
+			float: right;
+			margin-right: 5px;
+			margin-left: auto;
+		}
+
+		.parameter_curr_state {
+			margin: 5px;
+		}
+
+		.parameter_curr_command {
+			cursor: pointer;
+			color: white;
+			background-color: #4CAF50;
+			border-width: 0;
+			margin: 5px;
+		}
+	</style>
+	<script>
+		window.onload = function () {
+			/* Update polling. It needs to be started before initial state data is received.
+			Else an state change may happen right after the initial state data is received but when the update
+			polling has not yet started. This will result in GUI data and actual state mismatch.
+			*/
+			var updates_xhr = new XMLHttpRequest();
+			updates_xhr.open('GET', '/updates')
+			updates_xhr.onreadystatechange = function () {
+				if (this.readyState == 4) {
+					if (this.status == 200) {
+						update_ui(JSON.parse(this.responseText));
+					}
+					else {
+						console.error('Error trying to get an update. Server responded: ' + this.status)
+					}
+					// Start a new poll
+					updates_xhr.open('GET', '/updates');
+					updates_xhr.send();
+				}
+			}
+			// Get initial state data (devices list, their initial states, etc)
+			var initial_state_xhr = new XMLHttpRequest();
+			initial_state_xhr.open('GET', '/initial_data')
+			initial_state_xhr.onreadystatechange = function () {
+				if (this.readyState == 4)
+					if (this.status == 200) {
+						// initial state data is received.
+						update_ui(JSON.parse(this.responseText));
+					}
+					else {
+						console.error('Error loading initial state data. Server responded: ' + this.status)
+					}
+			}
+			initial_state_xhr.send()
+
+			updates_xhr.send() // Remember – request is going to be sent again after this one is answered
+		}
+		function update_ui (state_data) {
+			/* Updates UI according to state_data
+			state_data format example:
+			{
+				"devices": [
+					{
+						"name": "well_and_tank",
+						"parameters":
+						{
+							'well_water_presence": 'not_present',
+							'pump': 'off',
+							'tank': 'not_full'
+						}
+					},
+					{
+						"name": "greenhouse",
+						"parameters":
+						{
+							'temperature": 21.1,
+							'pump': 'off',
+							'tank': 'not_full'
+						}
+					},
+					...
+				],
+				"controller_config": {
+					"pump_auto_control_turn_off_when_tank_full": true
+				}
+			}
+			*/
+			// If some of devices' state  has been updated
+			if (state_data.devices.length != 0)
+			{
+				//Debug !!!
+				var counter = document.getElementById("update_counter");
+				counter.innerText = parseInt(counter.innerText) + 1;
+
+				// For each device whose information has been updated
+				state_data.devices.forEach ( function (curr_dev) {
+					// For each parameter whose information has been updated
+					for (curr_param_name in curr_dev.parameters) {
+						// Get current parameter UI element
+						var curr_param_html = document.querySelector('.control_panel .group[name="' +
+							curr_dev.name + '"] .parameter[name="' + curr_param_name + '"]');
+						update_device_param_ui(curr_param_html, curr_dev.parameters[curr_param_name])
+					};
+				});
+			}
+		}
+		function update_device_param_ui (param_html, param_new_state) {
+			/* Updates parameter UI appearance according to its state param_new_state. Changes control button
+			and the state field
+			param_new_state is a json value. It may be a string for "bool" parameters or a number for "float"
+			parameters. Example:
+			for well_and_tank device's parameter 'well_water_presence' it can be either 'present' or
+			'not present'
+			*/
+			// Get parameter state html
+			var param_curr_state_html = param_html.querySelector(".parameter_curr_state_and_command " +
+				".parameter_curr_state")
+			// Different changers for different characteristic types
+			if (param_html.getAttribute('type') == "bool") {
+				// Lookup for the localized parameter status text
+				var new_state_index
+				if (param_curr_state_html.getAttribute('state_0') == param_new_state)
+					new_state_index = 0
+				else if (param_curr_state_html.getAttribute('state_1') == param_new_state) {
+					new_state_index = 1
+				}
+				else {
+					console.error('Error updating parameter UI: Unrecognized parameter state')
+					return
+				}
+				param_curr_state_html.innerText =
+					param_curr_state_html.getAttribute('state_'+new_state_index+'_localized')
+
+				if (param_html.getAttribute('controllable')) {
+					// Get parameter command html
+					param_curr_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
+						".parameter_curr_command")
+					// New parameter command must be opposite to its new current state.
+					if (new_state_index == 0) {
+						param_curr_command_html.innerText =
+							param_curr_command_html.getAttribute('command_1_localized')
+					}
+					else {
+						param_curr_command_html.innerText =
+							param_curr_command_html.getAttribute('command_0_localized')
+					}
+				}
+			}
+		}
+
+		//Control items function. If the control item (e.g. command button) is used, information will be
+		//transfered to the server
+		var command_xhr = new XMLHttpRequest();
+		function onCommandButtonClicked(button) {
+			command_xhr.open('POST', '/command');
+			command_xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+			// Information about device and parameter may aswell be obtained through button.parentElement.
+			command_xhr.send('{ "device": "' + button.getAttribute('device') +
+				'", "param": "' + button.getAttribute('param') + '", "command": "' +
+				button.getAttribute('command') + '" }');
+		}
+	</script>
+
+</head>
+
+
+<body>
+	<!-- Debug elements -->
+	<p><span>Updates: </span><span id="update_counter">0</span></p>
+	<!-- /Debug elements -->
+	<div class="control_panel">
+		{% for curr_device_descr in periph_devices_descriptions %}
+		<div class='group' name="{{curr_device_descr['name']}}">
+			<h3 class='group_header'>{{curr_device_descr.get('name_'+locale, curr_device_descr['name'])}}</h3>
+			{% for curr_param in curr_device_descr['parameters'] %}
+			<div class="parameter"
+				name = "{{curr_param['name']}}"
+				controllable={{'true' if curr_param['controllable'] else 'false'}}
+				type = {{curr_param['type']}}
+				>
+				<label class="parameter_name">{{curr_param.get('name_'+locale, curr_param['name'])}}</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						{% if curr_param['type'] == 'bool' %}
+						state_0="{{curr_param['states'][0]}}"
+						state_1="{{curr_param['states'][1]}}"
+						state_0_localized="{{curr_param.get('states_'+locale, curr_param['states'])[0]}}"
+						state_1_localized="{{curr_param.get('states_'+locale, curr_param['states'])[1]}}"
+						{% endif %}
+						>
+						TBD
+					</div>
+					{% if curr_param['controllable'] %}
+					<button class="parameter_curr_command"
+						{% if curr_param['type'] == 'bool' %}
+						command_0="{{curr_param['commands'][0]}}"
+						command_1="{{curr_param['commands'][1]}}"
+						command_0_localized="{{curr_param.get('commands_'+locale, curr_param['commands'])[0]}}"
+						command_1_localized="{{curr_param.get('commands_'+locale, curr_param['commands'])[1]}}"
+						{% endif %}
+						device="{{curr_device_descr['name']}}"
+						param="{{curr_param['name']}}"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+					{% endif %}
+				</div>
+			</div>
+			{% endfor %}
+		</div>
+		{% endfor %}
+	</div>
+</body>
+
+</html>

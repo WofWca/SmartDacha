@@ -1,0 +1,6 @@
+{
+  "pump_auto_control": false,
+  "pump_auto_control_mode": "normally_on",
+  "pump_auto_control_turn_off_when_well_empty": true,
+  "pump_auto_control_turn_off_when_tank_full": true
+}

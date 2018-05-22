@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Умная дача</title>
+	<style>
+		* {
+			font-family: Arial;
+		}
+
+		.control_panel {
+			margin: auto;
+			vertical-align: middle;
+			max-width: 500px;
+		}
+
+		.group {
+			background-color: honeydew;
+			margin: 5px;
+			padding: 5px;
+			border-radius: 2px;
+		}
+
+		.group_header {
+			margin-top: 5px;
+			margin-bottom: 5px;
+		}
+
+		.parameter {
+			overflow: auto;
+			padding: 5px;
+			margin: 5px;
+			vertical-align: middle;
+			border-radius: 2px;
+			background-color: gainsboro;
+		}
+
+		.parameter_name {
+			margin: 0 auto;
+			display: inline-flex;
+		}
+
+		.parameter_status_and_command {
+			display: inline-flex;
+			float: right;
+			margin-right: 5px;
+			margin-left: auto;
+		}
+
+		.parameter_status {
+			margin: 5px;
+		}
+
+		.parameter_command {
+			cursor: pointer;
+			color: white;
+			background-color: #4CAF50;
+			border-width: 0;
+			margin: 5px;
+		}
+	</style>
+	<script>
+		window.onload = function () {
+			/* Update polling. It needs to be started before initial data is received.
+			Else an state change may happen right after the initial data is received but when the update
+			polling has not yet started. This will result in GUI data and actual status.
+			*/
+			var updates_xhr = new XMLHttpRequest();
+			updates_xhr.open('GET', '/updates')
+			updates_xhr.onreadystatechange = function () {
+				if (this.readyState == 4) {
+					if (this.status == 200) {
+						handle_update(this.responseText)
+					}
+					else {
+						console.log('Error trying to get an update. Server responded: ' + this.status)
+					}
+					// Start a new poll
+					updates_xhr.open('GET', '/updates');
+					updates_xhr.send();
+				}
+				else {
+					return;
+				}
+			}
+			// Get initial data (devices list, their initial states, etc)
+			var initial_status_xhr = new XMLHttpRequest();
+			initial_status_xhr.open('GET', '/initial_data')
+			initial_status_xhr.onreadystatechange = function () {
+				if (this.readyState == 4)
+					if (this.status == 200) {
+						// Initial data is received.
+						update_ui(JSON.parse(this.responseText))
+						return;
+					}
+					else {
+						console.log('Error loading initial data. Server responded: ' + this.status)
+					}
+				else {
+					return;
+				}
+			}
+			initial_status_xhr.send()
+
+			updates_xhr.send() // Remember – request is going to be sent again after this one is answered
+		}
+		update_ui = function (update_data) {
+			/* Updates UI according to update_data
+			update_data format example:
+			{
+				"devices": [
+					{
+						"name": "Well_and_tank",
+						"parameters": [
+							{
+								"name": "Well_water_presence",
+								"new_status_text_localized": "Есть"
+							},
+							{
+								"name": "Pump",
+								"new_status_text_localized": "Включен",
+								"new_command_text_localized": "Выключить"
+							}
+						]
+					},
+					{
+						"name": "Greenhouse",
+						...
+					},
+					...
+				],
+				"controller": {
+					...
+				}
+			}
+			*/
+			// For each device whose information has been updated
+			update_data.devices.forEach ( function (curr_dev_update_data) {
+				// For each parameter whose information has been updated
+				curr_dev_update_data.parameters.forEach ( function (curr_param_update_data) {
+					// Get current parameter UI element
+					var curr_param_html = document.querySelector('.control_panel .group[name="' +
+						curr_dev_update_data.name + '"] .parameter[name="' +
+						curr_param_update_data.name + '"]');
+					// Update parameter status if it has been updated
+					if (curr_param_update_data.new_status_text_localized != null)
+					{
+						curr_param_html.querySelector('.parameter_status').innerText =
+							curr_param_update_data.new_status_text_localized;
+					}
+					// Update parameter command if it has been updated
+					if (curr_param_update_data.new_command_text_localized != null)
+					{
+						curr_param_html.querySelector('.parameter_command').innerText =
+							curr_param_update_data.new_command_text_localized;
+					}
+				});
+			});
+		}
+
+		handle_update = function (updateText) {
+			// Called when something changed at Dacha
+			var counter = document.getElementById("update_counter");
+			counter.innerText = parseInt(counter.innerText) + 1;
+			console.log('Got an update: ' + updateText)
+		}
+
+		//Control items function. If the control item (e.g. command button) is used, information will be
+		//transfered to the server
+		var command_xhr = new XMLHttpRequest();
+		function onCommandButtonClicked(button) {
+			command_xhr.open('POST', '/command');
+			command_xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+			// Information about device and parameter may aswell be obtained through .parentElement. Consider
+			command_xhr.send('{ "device": "' + button.getAttribute('device') +
+				'", "param": "' + button.getAttribute('param') + '", "command": "' +
+				button.getAttribute('command') + '" }');
+		}
+	</script>
+
+</head>
+
+
+<body>
+	<!-- Debug elements -->
+	<p><span>Updates: </span><span id="update_counter">0</span></p>
+	<!-- /Debug elements -->
+	<div class="control_panel">
+		
+		<div class='group' name="Well_and_tank">
+			<h3 class='group_header'>Насос</h3>
+			
+			<div class="parameter" name = "Well_water_presence"
+				controllable=False>
+				<label class="parameter_name">Вода в скважине</label>
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+				</div>
+				
+			</div>
+			
+			<div class="parameter" name = "Pump"
+				controllable=True>
+				<label class="parameter_name">Насос</label>
+				
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+					<button class="parameter_command"
+						device = "Well_and_tank"
+						param = "Pump"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+				</div>
+				
+				
+			</div>
+			
+			<div class="parameter" name = "Tank"
+				controllable=False>
+				<label class="parameter_name">Резервуар</label>
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+				</div>
+				
+			</div>
+			
+		</div>
+		
+		<div class='group' name="Greenhouse">
+			<h3 class='group_header'>Теплица</h3>
+			
+			<div class="parameter" name = "Temperature"
+				controllable=False>
+				<label class="parameter_name">Температура, °C</label>
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+				</div>
+				
+			</div>
+			
+			<div class="parameter" name = "Window"
+				controllable=True>
+				<label class="parameter_name">Форточка</label>
+				
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+					<button class="parameter_command"
+						device = "Greenhouse"
+						param = "Window"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+				</div>
+				
+				
+			</div>
+			
+			<div class="parameter" name = "Lights"
+				controllable=True>
+				<label class="parameter_name">Свет</label>
+				
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+					<button class="parameter_command"
+						device = "Greenhouse"
+						param = "Lights"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+				</div>
+				
+				
+			</div>
+			
+			<div class="parameter" name = "Watering"
+				controllable=True>
+				<label class="parameter_name">Полив</label>
+				
+				
+				<div class="parameter_status_and_command">
+					<div class="parameter_status">TBD</div>
+					<button class="parameter_command"
+						device = "Greenhouse"
+						param = "Watering"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+				</div>
+				
+				
+			</div>
+			
+		</div>
+		
+	</div>
+</body>
+
+</html>

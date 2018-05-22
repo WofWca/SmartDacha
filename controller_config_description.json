@@ -1,0 +1,44 @@
+[
+  {
+    "name": "pump_auto_control",
+    "name_en": "Automatic pump control",
+    "name_ru": "Автоматический контроль насоса",
+    "type": "bool",
+    "values": [false, true],
+    "values_en": ["OFF", "ON"],
+    "values_ru": ["ВЫКЛ", "ВКЛ"],
+    "group": "pump"
+  },
+  {
+    "name": "pump_auto_control_mode",
+    "name_en": "Automatic pump control mode",
+    "name_ru": "Режим автоматического контроля насоса",
+    "type": "bool",
+    "values": ["normally_off", "normally_on"],
+    "values_en": ["Normally-off", "Normally-on"],
+    "values_ru": ["Нормально-выключен", "Нормально-включен"],
+    "group": "pump",
+    "description": "Normally-off: pump is OFF unless some automation logic condition wants it to be ON (e.g. fire extinguishing system)\\r\\n Normally-on: pump is ON unless some automation logic condition wants it to be OFF (e.g. if the well is empty)"
+  },
+  {
+    "name": "pump_auto_control_turn_off_when_well_empty",
+    "name_en": "Turn off the pump when the well is empty",
+    "name_ru": "Выключать насос, когда скважина пуста",
+    "type": "bool",
+    "values": [false, true],
+    "values_en": ["OFF", "ON"],
+    "values_ru": ["ВЫКЛ", "ВКЛ"],
+    "group": "pump"
+  },
+  {
+    "name": "pump_auto_control_turn_off_when_tank_full",
+    "name_en": "Turn off the pump when the tank is full",
+    "name_ru": "Выключать насос, когда резервуар заполнен",
+    "type": "bool",
+    "values": [false, true],
+    "values_en": ["OFF", "ON"],
+    "values_ru": ["ВЫКЛ", "ВКЛ"],
+    "group": "pump"
+
+  }
+]

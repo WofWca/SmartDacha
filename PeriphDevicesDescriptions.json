@@ -1,0 +1,88 @@
+[
+  {
+    "name": "well_and_tank",
+    "name_en": "Well and tank",
+    "name_ru": "Насос",
+    "MAC": "E0:E5:CF:78:57:3A",
+    "type": "BLE_serial_AT-09",
+    "parameters": [
+      {
+        "name": "pump",
+        "type": "bool",
+        "controllable": true,
+        "name_en": "Pump",
+        "name_ru": "Насос",
+        "states": ["off", "on"],
+        "states_en": ["OFF", "ON"],
+        "states_ru": ["Включен", "Выключен"],
+        "commands": ["turn_off", "turn_on"],
+        "commands_en": ["Turn off", "Turn on"],
+        "commands_ru": ["Выключить", "Включить"]
+      },
+      {
+        "name": "well_water_presence",
+        "type": "bool",
+        "controllable": false,
+        "name_en": "Well water presence",
+        "name_ru": "Вода в скважине",
+        "states": ["not_present", "present"],
+        "states_en": ["Not present", "Present"],
+        "states_ru": ["Нет", "Есть"]
+      },
+      {
+        "name": "tank",
+        "type": "bool",
+        "controllable": false,
+        "name_ru": "Резервуар",
+        "states": ["not_full", "full"],
+        "states_en": ["Not full", "Full"],
+        "states_ru": ["Заполнен", "Не заполнен"]
+      }
+    ]
+  },
+  {
+    "name": "greenhouse",
+    "name_en": "Greenhouse",
+    "name_ru": "Теплица",
+    "MAC": "E0:E5:CF:78:70:5C",
+    "type": "BLE_serial_AT-09",
+    "parameters": [
+      {
+        "name": "temperature",
+        "type": "float",
+        "controllable": false,
+        "name_ru": "Температура, °C"
+      },
+      {
+        "name": "window",
+        "type": "bool",
+        "controllable": true,
+        "name_ru": "Форточка",
+        "states": ["closed", "opened"],
+        "states_ru": ["Закрыто", "Открыто"],
+        "commands": ["Close", "Open"],
+        "commands_ru": ["Закрыть", "Открыть"]
+      },
+      {
+        "name": "lights",
+        "type": "bool",
+        "controllable": true,
+        "name_ru": "Свет",
+        "states": ["off", "on"],
+        "states_ru": ["Выключен", "Включен"],
+        "commands": ["turn_off", "turn_on"],
+        "commands_ru": ["Выключить", "Включить"]
+      },
+      {
+        "name": "watering",
+        "type": "bool",
+        "controllable": true,
+        "name_ru": "Полив",
+        "states": ["off", "on"],
+        "states_ru": ["Выключен", "Включен"],
+        "commands": ["turn_off", "turn_on"],
+        "commands_ru": ["Выключить", "Включить"]
+      }
+    ]
+  }
+]

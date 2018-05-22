@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Умная дача</title>
+	<style>
+		* {
+			font-family: Arial;
+		}
+
+		.control_panel {
+			margin: auto;
+			vertical-align: middle;
+			max-width: 500px;
+		}
+
+		.group {
+			background-color: honeydew;
+			margin: 5px;
+			padding: 5px;
+			border-radius: 2px;
+		}
+
+		.group_header {
+			margin-top: 5px;
+			margin-bottom: 5px;
+		}
+
+		.parameter {
+			overflow: auto;
+			padding: 5px;
+			margin: 5px;
+			vertical-align: middle;
+			border-radius: 2px;
+			background-color: gainsboro;
+		}
+
+		.parameter_name {
+			margin: 0 auto;
+			display: inline-flex;
+		}
+
+		.parameter_curr_state_and_command {
+			display: inline-flex;
+			float: right;
+			margin-right: 5px;
+			margin-left: auto;
+		}
+
+		.parameter_curr_state {
+			margin: 5px;
+		}
+
+		.parameter_curr_command {
+			cursor: pointer;
+			color: white;
+			background-color: #4CAF50;
+			border-width: 0;
+			margin: 5px;
+		}
+	</style>
+	<script>
+		window.onload = function () {
+			/* Update polling. It needs to be started before initial state data is received.
+			Else an state change may happen right after the initial state data is received but when the update
+			polling has not yet started. This will result in GUI data and actual state mismatch.
+			*/
+			var updates_xhr = new XMLHttpRequest();
+			updates_xhr.open('GET', '/updates')
+			updates_xhr.onreadystatechange = function () {
+				if (this.readyState == 4) {
+					if (this.status == 200) {
+						update_ui(JSON.parse(this.responseText));
+					}
+					else {
+						console.error('Error trying to get an update. Server responded: ' + this.status)
+					}
+					// Start a new poll
+					updates_xhr.open('GET', '/updates');
+					updates_xhr.send();
+				}
+			}
+			// Get initial state data (devices list, their initial states, etc)
+			var initial_state_xhr = new XMLHttpRequest();
+			initial_state_xhr.open('GET', '/initial_data')
+			initial_state_xhr.onreadystatechange = function () {
+				if (this.readyState == 4)
+					if (this.status == 200) {
+						// initial state data is received.
+						update_ui(JSON.parse(this.responseText));
+					}
+					else {
+						console.error('Error loading initial state data. Server responded: ' + this.status)
+					}
+			}
+			initial_state_xhr.send()
+
+			updates_xhr.send() // Remember – request is going to be sent again after this one is answered
+		}
+		function update_ui (state_data) {
+			/* Updates UI according to state_data
+			state_data format example:
+			{
+				"devices": [
+					{
+						"name": "well_and_tank",
+						"parameters":
+						{
+							'well_water_presence": 'not_present',
+							'pump': 'off',
+							'tank': 'not_full'
+						}
+					},
+					{
+						"name": "greenhouse",
+						"parameters":
+						{
+							'temperature": 21.1,
+							'pump': 'off',
+							'tank': 'not_full'
+						}
+					},
+					...
+				],
+				"controller_config": {
+					"pump_auto_control_turn_off_when_tank_full": true
+				}
+			}
+			*/
+			// If some of devices' state  has been updated
+			if (state_data.devices.length != 0)
+			{
+				//Debug !!!
+				var counter = document.getElementById("update_counter");
+				counter.innerText = parseInt(counter.innerText) + 1;
+
+				// For each device whose information has been updated
+				state_data.devices.forEach ( function (curr_dev) {
+					// For each parameter whose information has been updated
+					for (curr_param_name in curr_dev.parameters) {
+						// Get current parameter UI element
+						var curr_param_html = document.querySelector('.control_panel .group[name="' +
+							curr_dev.name + '"] .parameter[name="' + curr_param_name + '"]');
+						update_device_param_ui(curr_param_html, curr_dev.parameters[curr_param_name])
+					};
+				});
+			}
+		}
+		function update_device_param_ui (param_html, param_new_state) {
+			/* Updates parameter UI appearance according to its state param_new_state. Changes control button
+			and the state field
+			param_new_state is a json value. It may be a string for "bool" parameters or a number for "float"
+			parameters. Example:
+			for well_and_tank device's parameter 'well_water_presence' it can be either 'present' or
+			'not present'
+			*/
+			// Get parameter state html
+			var param_curr_state_html = param_html.querySelector(".parameter_curr_state_and_command " +
+				".parameter_curr_state")
+			// Different changers for different characteristic types
+			if (param_html.getAttribute('type') == "bool") {
+				// Lookup for the localized parameter status text
+				var new_state_index
+				if (param_curr_state_html.getAttribute('state_0') == param_new_state)
+					new_state_index = 0
+				else if (param_curr_state_html.getAttribute('state_1') == param_new_state) {
+					new_state_index = 1
+				}
+				else {
+					console.error('Error updating parameter UI: Unrecognized parameter state')
+					return
+				}
+				param_curr_state_html.innerText =
+					param_curr_state_html.getAttribute('state_'+new_state_index+'_localized')
+
+				if (param_html.getAttribute('controllable')) {
+					// Get parameter command html
+					param_curr_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
+						".parameter_curr_command")
+					// New parameter command must be opposite to its new current state.
+					if (new_state_index == 0) {
+						param_curr_command_html.innerText =
+							param_curr_command_html.getAttribute('command_1_localized')
+					}
+					else {
+						param_curr_command_html.innerText =
+							param_curr_command_html.getAttribute('command_0_localized')
+					}
+				}
+			}
+		}
+
+		//Control items function. If the control item (e.g. command button) is used, information will be
+		//transfered to the server
+		var command_xhr = new XMLHttpRequest();
+		function onCommandButtonClicked(button) {
+			command_xhr.open('POST', '/command');
+			command_xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+			// Information about device and parameter may aswell be obtained through button.parentElement.
+			command_xhr.send('{ "device": "' + button.getAttribute('device') +
+				'", "param": "' + button.getAttribute('param') + '", "command": "' +
+				button.getAttribute('command') + '" }');
+		}
+	</script>
+
+</head>
+
+
+<body>
+	<!-- Debug elements -->
+	<p><span>Updates: </span><span id="update_counter">0</span></p>
+	<!-- /Debug elements -->
+	<div class="control_panel">
+		
+		<div class='group' name="well_and_tank">
+			<h3 class='group_header'>Насос</h3>
+			
+			<div class="parameter"
+				name = "pump"
+				controllable=true
+				type = bool
+				>
+				<label class="parameter_name">Насос</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="off"
+						state_1="on"
+						state_0_localized="Включен"
+						state_1_localized="Выключен"
+						
+						>
+						TBD
+					</div>
+					
+					<button class="parameter_curr_command"
+						
+						command_0="turn_off"
+						command_1="turn_on"
+						command_0_localized="Выключить"
+						command_1_localized="Включить"
+						
+						device="well_and_tank"
+						param="pump"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+					
+				</div>
+			</div>
+			
+			<div class="parameter"
+				name = "well_water_presence"
+				controllable=false
+				type = bool
+				>
+				<label class="parameter_name">Вода в скважине</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="not_present"
+						state_1="present"
+						state_0_localized="Нет"
+						state_1_localized="Есть"
+						
+						>
+						TBD
+					</div>
+					
+				</div>
+			</div>
+			
+			<div class="parameter"
+				name = "tank"
+				controllable=false
+				type = bool
+				>
+				<label class="parameter_name">Резервуар</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="not_full"
+						state_1="full"
+						state_0_localized="Заполнен"
+						state_1_localized="Не заполнен"
+						
+						>
+						TBD
+					</div>
+					
+				</div>
+			</div>
+			
+		</div>
+		
+		<div class='group' name="greenhouse">
+			<h3 class='group_header'>Теплица</h3>
+			
+			<div class="parameter"
+				name = "temperature"
+				controllable=false
+				type = float
+				>
+				<label class="parameter_name">Температура, °C</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						>
+						TBD
+					</div>
+					
+				</div>
+			</div>
+			
+			<div class="parameter"
+				name = "window"
+				controllable=true
+				type = bool
+				>
+				<label class="parameter_name">Форточка</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="closed"
+						state_1="opened"
+						state_0_localized="Закрыто"
+						state_1_localized="Открыто"
+						
+						>
+						TBD
+					</div>
+					
+					<button class="parameter_curr_command"
+						
+						command_0="Close"
+						command_1="Open"
+						command_0_localized="Закрыть"
+						command_1_localized="Открыть"
+						
+						device="greenhouse"
+						param="window"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+					
+				</div>
+			</div>
+			
+			<div class="parameter"
+				name = "lights"
+				controllable=true
+				type = bool
+				>
+				<label class="parameter_name">Свет</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="off"
+						state_1="on"
+						state_0_localized="Выключен"
+						state_1_localized="Включен"
+						
+						>
+						TBD
+					</div>
+					
+					<button class="parameter_curr_command"
+						
+						command_0="turn_off"
+						command_1="turn_on"
+						command_0_localized="Выключить"
+						command_1_localized="Включить"
+						
+						device="greenhouse"
+						param="lights"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+					
+				</div>
+			</div>
+			
+			<div class="parameter"
+				name = "watering"
+				controllable=true
+				type = bool
+				>
+				<label class="parameter_name">Полив</label>
+				<div class="parameter_curr_state_and_command">
+					<div class="parameter_curr_state"
+						
+						state_0="off"
+						state_1="on"
+						state_0_localized="Выключен"
+						state_1_localized="Включен"
+						
+						>
+						TBD
+					</div>
+					
+					<button class="parameter_curr_command"
+						
+						command_0="turn_off"
+						command_1="turn_on"
+						command_0_localized="Выключить"
+						command_1_localized="Включить"
+						
+						device="greenhouse"
+						param="watering"
+						onclick="onCommandButtonClicked(this)"
+						>
+						TBD
+					</button>
+					
+				</div>
+			</div>
+			
+		</div>
+		
+	</div>
+</body>
+
+</html>
