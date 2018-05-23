@@ -1,8 +1,10 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
+import SimplePeriphDev
 import json
 import Controller
 import time
+import copy
 
 
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -19,11 +21,59 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(bytes('XHResponse text!', self.server.encoding))
         elif self.path == '/initial_data':
-            # Initial server data request. All the devices, their controls, current states,
-            # also controller controls (e.g. "Turn on automatic pump control")
+            """
+            Initial server data request. All the devices, their controls, current states,
+            also controller controls (e.g. "Turn on automatic pump control")
+            Response format example:
+            {
+                "devices": [
+                    {
+                        "name": "well_and_tank",
+                        "parameters":
+                        {
+                            'well_water_presence": 'not_present',
+                            'pump': 'off',
+                            'tank': 'not_full'
+                        },
+                        "online": true
+                    },
+                    {
+                        "name": "greenhouse",
+                        "parameters":
+                        {
+                            'temperature": 21.1,
+                            'pump': 'off',
+                            'tank': 'not_full'
+                        }
+                        "online": false
+                    },
+                    ...
+                ],
+                "controller_config": {
+                    "pump_auto_control_turn_off_when_tank_full": true
+                }
+            }
+            """
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(bytes(json.dumps(self.server.controller.full_state, indent='\t'), self.server.encoding))
+            # Forming full state data structure. It will be then stringified and sent to the client.
+            state_copy = {
+                'devices': []
+            }
+            # Reading controller config
+            # Not forgetting to use locks
+            with self.server.controller.config_lock:
+                state_copy['controller_config'] = copy.deepcopy(self.server.controller.config)
+            # Reading devices' information
+            for curr_dev_name, curr_dev in self.server.controller.periph_devices.items():
+                with curr_dev.lock:
+                    state_copy['devices'].append({
+                        'name': curr_dev_name,
+                        'online': curr_dev.online,
+                        'parameters': copy.deepcopy(curr_dev.parameters)
+                    })
+            # Stingifying gathered data and sending it to the client
+            self.wfile.write(bytes(json.dumps(state_copy, indent='\t'), self.server.encoding))
         elif self.path == '/favicon.ico':
             # Favicon request
             self.send_response(200)
@@ -66,4 +116,3 @@ class CustomHTTPServer(ThreadingMixIn, HTTPServer):
         self.main_page_file_name_template = main_page_file_name_template
         self.encoding = 'UTF-8'
         self.controller = controller
-

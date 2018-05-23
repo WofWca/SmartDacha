@@ -1,14 +1,19 @@
 import pygatt
 import logging
 import threading
+from enum import Enum, auto
+
+class SimplePeriphDevErrors(Enum):
+    NoSuchParameter = auto()
+    InternalError = auto()
+
 
 
 class SimplePeriphDev:
 
     def __init__(self, description):
         """
-
-        self.state structure sample format:
+        self.parameters structure sample format:
         {
             'well_water_presence": 'not_present',
             'pump': 'off',
@@ -16,41 +21,43 @@ class SimplePeriphDev:
         }
         :param description: Device description structure (see PeriphDevicesDescriptions.json)
         """
-        self.name = description['name']
-        # self.description = description
+        self.description = description # Is it safe?!!!
         self.online = False
         # Threading lock for multithreading. Locks whenever the work with the device is in progress
         self.lock = threading.Lock()
         # Function. Called when device's characteristics update
-        self.update_handler = self.default_update_handler
-        # Function. Called when a device encounters an error (e.g. could not recognize command)
+        self.parameter_update_handler = self.default_parameter_update_handler
+        # Function. Called when the device encounters an error (e.g. could not recognize command)
         self.error_handler = self.default_error_handler
-        self.state = {}
+        # Function. Called when the device goes offline
+        self.gone_offline_handler = self.default_error_handler
+        # self.parameters is not meant to be changed directly. Use self. set_parameter
+        self.parameters = {}
 
     # Sends ASCII text to the device.
     def __send_text(self, text: str):
         raise NotImplementedError
 
-    def default_update_handler(self, device):
-        logging.info('Default update handler has been called for "{}" device'.format(device))
+    def default_parameter_update_handler(self, device, parameter, value):
+        pass
 
-    def default_error_handler(self, device):
-        logging.info('Default error handler has been called for "{}" device'.format(device))
+    def default_error_handler(self, device, code, message):
+        logging.warning('Default error handler has been called for "{}" device. Message: "{}"'.format(device, message))
 
-    def change_parameter(self, parameter, value):
+    def default_gone_offline_handler(self):
+        pass
+
+    def set_parameter(self, parameter, value):
         """
-        Changes a controllable parameter to value. Calls self.error_handler if error has occured during this procedure
+        Tries to change a controllable parameter "parameter" to "value".
         :param parameter: Parameter to be changed
         :param value: Value to be assigned to the specified parameter
         :return:
         """
-        # Let's check if we need to transfer any text or the parameter is already in the requested state
-        if self.state[parameter] == value:
-            self.__send_text('{}:{}'.format(parameter, value))
+        raise NotImplementedError
 
     def __str__(self):
         return self.online
-
 
 
 # BLE peripheral device with simple real/integer/boolean parameters and controls
@@ -69,6 +76,16 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         self.conn = None
         self.__connect()
 
+    def set_parameter(self, parameter, value):
+        # Let's check if we need to transfer any text or the parameter is already in the requested parameters
+        try:
+            if self.parameters[parameter] == value:
+                pass
+            else:
+                self.__send_text('PRM:{}:{}'.format(parameter, value))
+        except KeyError:
+            self.error_handler(SimplePeriphDevErrors.NoSuchParameter)
+
     def __connect(self, timeout=5):
         """
         try connecting to the device
@@ -85,6 +102,11 @@ class SimpleBlePeriphDev(SimplePeriphDev):
 
     # Sends ASCII text to the device. text cannot be an empty string
     def __send_text(self, text: str):
+        """
+        Sends ASCII text to the BLE device. Protocol:
+        :param text:
+        :return:
+        """
         with self.lock:
             self.conn.char_write(uuid=self.bleModuleSerialCharUUID,
                                  value=str.encode(text, encoding='ASCII'),
@@ -94,6 +116,14 @@ class SimpleBlePeriphDev(SimplePeriphDev):
     def __handle_notification(self, handle, value):
         """
         Called when a BLE device sends a notification
+        accepted "value" format:
+        <notification_type>[:<arguments>]
+        <notification_type> can be: "PRM" or "ERR"
+        "PRM" is used to transfer information about parameter updates
+        if the <notification_type> is "PRM", <arguments> must have the following format:
+        <param>:<val>
+        Examples:
+        PRM:well_water_presence:not_present
         :param handle:
         :param value:
         :return:
@@ -101,22 +131,71 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         # Consider locking less code <efficiency>
         stringified_data = value.decode('ASCII')
         logging.debug('PeriphDev {} notif raw: "{}"'.format(self, stringified_data))
-        separation_pos = stringified_data.find(':')
-        # If the received notification's format is OK, call the notification handler, else log an error
-        if separation_pos == -1:
-            logging.error('Incorrect format. No ":". Device {} sent "{}"'.format(self, stringified_data))
-        elif separation_pos == 0:
-            logging.error('Incorrect format. Parameter name is empty. '
-                          'Device {} sent "{}"'.format(self, stringified_data))
-        elif separation_pos == len(stringified_data) + 1:
-            logging.error('Incorrect format. New parameter value is empty.'
-                          'Device {} sent: "{}"'.format(self, stringified_data))
+        # If the received notification format is OK, call the update handler, else call the error handler
+        parsed_data = stringified_data.split(':')
+        if len(parsed_data) < 2:
+            self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                               message='Invalid BLE device message format: "{}"'.format(stringified_data))
         else:
-            self.notification_handler(device=self, message=stringified_data)
+            if parsed_data[0] == 'PRM':
+                if len(parsed_data) != 3:
+                    self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                                       message='Invalid BLE device message format: "{}"'.format(stringified_data))
+                else:
+                    # Check if specified parameter exists
+                    for curr_param_description in self.description['parameters']:
+                        if curr_param_description['name'] == parsed_data[1]:
+                            # Parameter found
+                            # Perform actions according to parameter type
+                            if curr_param_description['type'] == 'bool':
+                                # Boolean parameter's value can only be one of two strings described in 'states'
+                                # attribute
+                                if (parsed_data[2] == curr_param_description['states'][0]) or \
+                                        (parsed_data[2] == curr_param_description['states'][1]):
+                                    # Everything's alright, changing self.parameters, calling parameter_update_handler
+                                    with self.lock:
+                                        self.parameters[parsed_data[1]] = parsed_data[2]
+                                    self.parameter_update_handler(device=self, parameter=parsed_data[1],
+                                                                  value=parsed_data[2])
+                                else:
+                                    self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                                                       message='Invalid BLE device message: "{}".' +
+                                                               'Invalid parameter value'.format(
+                                                                   stringified_data))
+                            elif curr_param_description['type'] == 'float':
+                                # Try parsing received value into float
+                                try:
+                                    parsed_value = float(parsed_data[2])
+                                    # Everything's alright, changing self.parameters, calling parameter_update_handler
+                                    with self.lock:
+                                        self.parameters[parsed_data[1]] = parsed_value
+                                    self.parameter_update_handler(device=self, parameter=parsed_data[1],
+                                                                  value=parsed_value)
+                                except ValueError:
+                                    self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                                                       message='Invalid BLE device message: "{}".' +
+                                                               'Invalid parameter value'.format(stringified_data))
+                            else:
+                                raise NotImplementedError('Parameter format "{}" is not supported'.
+                                                          format(curr_param_description['type']))
+
+                            # Stop searching for parameter, it's found already
+                            break
+                    else:
+                        # No such parameter
+                        self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                                           message='Invalid BLE device message: "{}".' +
+                                                   'The device does not have such parameter'.format(stringified_data))
+            elif parsed_data[0] == 'ERR':
+                self.error_handler
+            else:
+                self.error_handler(device=self, code=SimplePeriphDevErrors.InternalError,
+                                   message='Invalid BLE device message format: ""'.format(stringified_data))
+
 
     def __reqest_status(self):
         """
-        Needed for self.state initialization.
+        Needed for self.parameters initialization.
         :return:
         """
 
@@ -135,13 +214,13 @@ class SimpleStubPeriphDev (SimplePeriphDev):
     def __init__(self, description=None):
         super(SimpleStubPeriphDev, self).__init__(description)
         for param in description['parameters']:
-            self.state[param['name']] = param['name'] + '_stub_val'
+            self.parameters[param['name']] = param['name'] + '_stub_val'
 
     def __send_text(self, text: str):
         logging.warning('Stub device "{}" just got "{}"'.format(self, text))
 
     def imitate_notification(self, message: str):
-        self.update_handler(device=self, message=message)
+        self.parameter_update_handler(device=self, message=message)
 
 class SimpleStubPeriphDev_well_and_tank (SimpleStubPeriphDev):
     def __init__(self, description):
