@@ -2,6 +2,7 @@ from threading import Lock
 from typing import Dict
 from SimplePeriphDev import SimpleBlePeriphDev, SimplePeriphDev
 import json
+import logging
 
 
 class Controller:
@@ -42,7 +43,10 @@ class Controller:
         # Telling devices to send notification to this controller then requesting their states
         # Their responses will be handled in a different function
         for curr_dev in self.periph_devices.values():
-            curr_dev.parameter_update_handler = self.handle_device_update
+            curr_dev.parameter_updated_callback = self.handle_device_parameter_update
+        # update_callback is called whenever an update happens. argument - update data with format similar to
+        # self.full_state
+        self.update_callback = self.__default_update_callback
         self.config_lock = Lock()
         # Initialize config variable.
         # Mutex could be used here. But no need in it - it's an __init__ function, which means nothing can access an
@@ -52,16 +56,6 @@ class Controller:
         with open(controller_config_file_name) as config_file:
             # Acquiring lock is not required as we're in __init__
             self.config = json.load(config_file)
-        self.full_state = {
-            'controller_config': self.config,
-            'devices': []
-        }
-        for curr_dev_name, curr_dev in self.periph_devices.items():
-            self.full_state['devices'].append({
-                'name': curr_dev_name,
-                'parameters': curr_dev.parameters
-            })
-            with curr_dev.lock
 
     def handle_user_command(self, command):
         """
@@ -70,10 +64,28 @@ class Controller:
         :return:
         """
 
-    def handle_device_update(self, device: SimplePeriphDev):
+    def handle_device_parameter_update(self, device: SimplePeriphDev, parameter, value):
         """
-        Called when a device's characteristic has been updated
-        :param message: Device's message. Format:
+        Called when a device's characteristic has been updated. This function will be assigned to devices'
+        self.parameter_updated_callback s. In its turn, calls self.update_callback, which may be a
+        HTTP server function
+        :param device: Device which send that notification
+        :return:
+        """
+        update_data = {
+            'devices': [{
+                'name': device.description['name'],
+                'parameters': {
+                    parameter: value
+                }
+            }],
+            'controller_config': {}
+        }
+        self.update_callback(update_data)
+
+    def handle_device_error(self, device: SimplePeriphDev):
+        """
+        Called when a device raises an error
         :param device: Device which send that notification
         :return:
         """
@@ -85,6 +97,10 @@ class Controller:
         :param update: Update JSON-formatted data (not string, JSON-like Python data structure)
         :return:
         """
+
+    def __default_update_callback(self, update_data):
+        logging.warning("Controller's default device parameter updated callback called")
+
 
     # Automation functions are followed. Consider moving logic into config-file
 

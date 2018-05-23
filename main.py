@@ -44,15 +44,6 @@ if __name__ == '__main__':
         {'periph_devices_descriptions': periph_devices_descriptions,
          'locale': curr_locale}))
 
-    # Controller init
-    controller = Controller(periph_devices, periph_devices_descriptions, filename)
-
-    # HTTP Server (individual thread)
-    http_server = CustomHTTPServer(http_server_address, main_page_file_name_template, favicon_file_name, controller)
-    http_server_thread = threading.Thread(target=run_http_server, daemon=True)
-    http_server_thread.start()
-    logging.debug('HTTP server started')
-
     # Connecting to the peripheral devices
     # All the peripheral devices
     periph_devices = {}
@@ -85,6 +76,16 @@ if __name__ == '__main__':
     logging.info('Peripheral devices configuration complete: %d/%d online',
                  num_devices_online, len(periph_devices))
 
+    # Controller init
+    controller = Controller(periph_devices, periph_devices_descriptions, controller_config_file_name)
+
+    # HTTP Server (individual thread)
+    http_server = CustomHTTPServer(http_server_address, main_page_file_name_template, favicon_file_name, controller)
+    http_server.parameter_update_handler = controller.update_callback
+    http_server_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_server_thread.start()
+    logging.debug('HTTP server started')
+
     # Main cycle
     logging.debug('Running main cycle')
     while True:
@@ -92,7 +93,7 @@ if __name__ == '__main__':
         # Retry connecting to devices that are offline
         for curr_dev in periph_devices.values():
             if curr_dev.online == False:
-                connection_result = curr_dev.__connect(retry_connection_tiemout)
+                connection_result = curr_dev.connect(retry_connection_tiemout)
                 if connection_result == True:
                     logging.info('%s connection retry succeeded', curr_dev)
                 else:
