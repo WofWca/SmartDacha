@@ -52,6 +52,7 @@ class SimplePeriphDev:
         return self.online
 
 
+
 # BLE peripheral device with simple real/integer/boolean parameters and controls
 # E.g. this class can be used for accessing well controller peripheral, but it is not designed for, say, video-camera
 # modules peripherals
