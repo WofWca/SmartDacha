@@ -38,7 +38,7 @@ class SimplePeriphDev:
         self.gone_offline_handler = self.default_error_handler
         # self.parameters is not meant to be changed directly. Use self. set_parameter
         self.parameters = {}
-        self.__init_parameters()
+        # self.__init_parameters()
 
         #for curr_param in self.description['parameters']:
         #    self.parameters[curr_param['name']] = None

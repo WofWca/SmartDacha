@@ -14,7 +14,7 @@
         "name_ru": "Насос",
         "states": ["off", "on"],
         "states_en": ["OFF", "ON"],
-        "states_ru": ["Включен", "Выключен"],
+        "states_ru": ["Выключен", "Включен"],
         "commands": ["turn_off", "turn_on"],
         "commands_en": ["Turn off", "Turn on"],
         "commands_ru": ["Выключить", "Включить"]
@@ -36,7 +36,7 @@
         "name_ru": "Резервуар",
         "states": ["not_full", "full"],
         "states_en": ["Not full", "Full"],
-        "states_ru": ["Заполнен", "Не заполнен"]
+        "states_ru": ["Не заполнен", "Заполнен"]
       }
     ]
   },

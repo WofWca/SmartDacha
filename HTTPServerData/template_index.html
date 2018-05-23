@@ -66,21 +66,27 @@
 			Else an state change may happen right after the initial state data is received but when the update
 			polling has not yet started. This will result in GUI data and actual state mismatch.
 			*/
+
+			var last_update_time = 0 //0 by default like 'haven't been getting any updates sine 1970'
 			var updates_xhr = new XMLHttpRequest();
-			updates_xhr.open('GET', '/updates')
+			updates_xhr.open('POST', '/updates')
 			updates_xhr.onreadystatechange = function () {
 				if (this.readyState == 4) {
 					if (this.status == 200) {
-						update_ui(JSON.parse(this.responseText));
+						update_data = JSON.parse(this.responseText)
+						last_update_time = update_data.time
+						update_ui(update_data);
 					}
 					else {
 						console.error('Error trying to get an update. Server responded: ' + this.status)
 					}
 					// Start a new poll
-					updates_xhr.open('GET', '/updates');
-					updates_xhr.send();
+					updates_xhr.open('POST', '/updates');
+					updates_xhr.send(last_update_time);
 				}
 			}
+			updates_xhr.send(last_update_time) // Remember – request is going to be sent again after this one is answered
+
 			// Get initial state data (devices list, their initial states, etc)
 			var initial_state_xhr = new XMLHttpRequest();
 			initial_state_xhr.open('GET', '/initial_data')
@@ -96,7 +102,6 @@
 			}
 			initial_state_xhr.send()
 
-			updates_xhr.send() // Remember – request is going to be sent again after this one is answered
 		}
 		function update_ui (state_data) {
 			/* Updates UI according to state_data
@@ -174,7 +179,7 @@
 				param_curr_state_html.innerText =
 					param_curr_state_html.getAttribute('state_'+new_state_index+'_localized')
 
-				if (param_html.getAttribute('controllable')) {
+				if (JSON.parse(param_html.getAttribute('controllable'))) {
 					// Get parameter command html
 					param_curr_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
 						".parameter_curr_command")

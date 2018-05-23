@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
     # HTTP Server (individual thread)
     http_server = CustomHTTPServer(http_server_address, main_page_file_name_template, favicon_file_name, controller)
-    http_server.parameter_update_handler = controller.update_callback
+    controller.update_callback = http_server.parameter_update_handler
     http_server_thread = threading.Thread(target=run_http_server, daemon=True)
     http_server_thread.start()
     logging.debug('HTTP server started')
