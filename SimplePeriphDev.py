@@ -33,9 +33,9 @@ class SimplePeriphDev:
         self.parameter_updated_callback = self.default_parameter_updated_callback
         # Function. Called when the device encounters an error due to incorrect use of itself
         # (e.g. could not recognize command)
-        self.error_handler = self.default_error_handler
+        self.error_callback = self.default_error_callback
         # Function. Called when the device goes offline
-        self.gone_offline_handler = self.default_error_handler
+        self.gone_offline_callback = self.default_gone_offline_callback
         # self.parameters is not meant to be changed directly. Use self. set_parameter
         self.parameters = {}
         # self.__init_parameters()
@@ -50,10 +50,10 @@ class SimplePeriphDev:
     def default_parameter_updated_callback(self, device, parameter, value):
         logging.info('Default update handler has been called for "{}" device. {}:{}'.format(device, parameter, value))
 
-    def default_error_handler(self, device, code, message):
+    def default_error_callback(self, device, code, message):
         logging.warning('Default error handler has been called for "{}" device. Message: "{}"'.format(device, message))
 
-    def default_gone_offline_handler(self):
+    def default_gone_offline_callback(self):
         pass
 
     def set_parameter(self, parameter, value):
@@ -203,7 +203,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
                         self.internal_error_handler(InternalErrors.InvalidFormat,
                                                     'No such parameter: "{}"'.format(data_string))
             elif parsed_data[0] == 'ERR':
-                self.error_handler(device=self, code=RaisedErrors.EndDeviceError, message=data_string)
+                self.error_callback(device=self, code=RaisedErrors.EndDeviceError, message=data_string)
             else:
                 self.internal_error_handler(InternalErrors.InvalidFormat, 'Invalid message type: "' + data_string + '"')
 

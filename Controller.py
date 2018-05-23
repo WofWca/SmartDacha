@@ -47,6 +47,7 @@ class Controller:
         # update_callback is called whenever an update happens. argument - update data with format similar to
         # self.full_state
         self.update_callback = self.__default_update_callback
+        self.error_callback = self.__default_error_callback
         self.config_lock = Lock()
         # Initialize config variable.
         # Mutex could be used here. But no need in it - it's an __init__ function, which means nothing can access an
@@ -57,12 +58,16 @@ class Controller:
             # Acquiring lock is not required as we're in __init__
             self.config = json.load(config_file)
 
-    def handle_user_command(self, command):
+    def handle_user_command(self, command_text):
         """
-        Used to transfer user commands to the controller
-        :param command: JSON-formatted command
+        Parses user command and executes it if it is valid
+        :param command_text: raw user-formed string
         :return:
         """
+        try:
+            command = json.loads(command_text)
+        except json.JSONDecodeError:
+            self.error_callback('Could not parse user command')
 
     def handle_device_parameter_update(self, device: SimplePeriphDev, parameter, value):
         """
@@ -101,6 +106,8 @@ class Controller:
     def __default_update_callback(self, update_data):
         logging.warning("Controller's default device parameter updated callback called")
 
+    def __default_error_callback(self, message):
+        logging.error('Default controller error callback called: "' + message + '"')
 
     # Automation functions are followed. Consider moving logic into config-file
 

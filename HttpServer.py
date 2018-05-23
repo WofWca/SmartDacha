@@ -1,10 +1,9 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from threading import Event, Lock
-import SimplePeriphDev
+import logging
 import json
 import Controller
-import time
 import copy
 import time
 from collections import deque
@@ -29,6 +28,7 @@ class CustomHTTPServer(ThreadingMixIn, HTTPServer):
         self.updates_buffer_lock = Lock()
         self.updates_buffer = deque(maxlen=10)
         self.last_update_time = 0.0
+        self.user_command_callback = self.default_user_command_callback
 
     def parameter_update_handler(self, update_data):
         self.last_update_time = time.time()
@@ -38,6 +38,9 @@ class CustomHTTPServer(ThreadingMixIn, HTTPServer):
             # Do not worry about instant clear, all the waiting threads will be awaken
         self.device_parameter_updated_event.set()
         self.device_parameter_updated_event.clear()
+
+    def default_user_command_callback(self, target, parameter, command):
+        logging.warning('Default user command callback handler called')
 
 
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -136,6 +139,7 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(400)
             # If the client did not receive the latest update yet
             self.server.updates_buffer_lock.acquire()
+            # noinspection PyUnboundLocalVariable
             if self.server.last_update_time > client_last_update_time:
                 self.send_response(200)
                 self.end_headers()
@@ -156,13 +160,12 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 with self.server.updates_buffer_lock:
                     update_to_send = self.server.updates_buffer[-1]
-
             self.wfile.write(bytes(json.dumps(update_to_send), self.server.encoding))
         elif self.path == '/command':
-            print(self.rfile.read(int(self.headers['Content-Length'])))
+            self.server.user_command_callback(self.rfile.read(int(self.headers['Content-Length'])))
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(bytes('Accepted', self.server.encoding))
+            self.wfile.write(bytes('Command transferred', self.server.encoding))
         else:
             self.send_error(400)
 
