@@ -121,11 +121,14 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         # Let's check if we need to transfer any text or the parameter is already in the requested parameters
         logging.info("To %s command %s:%s", self, parameter, command)
         with self._lock:
-            skip = self._parameters[parameter] == command
+            skip = self._parameters.get(parameter, None) == command
         if skip:
             pass
         else:
-            self.__send_text('PRM:{}:{}'.format(parameter, command))
+            try:
+                self.__send_text('PRM:{}:{}'.format(parameter, command))
+            except self.exceptions.NotConnectedError:
+                logging.error('Attempted to send a command to the disonnected device %s', self)
 
     # Sends ASCII text to the device. text cannot be an empty string
     def __send_text(self, text: str):
@@ -144,6 +147,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
             except pygatt.exceptions.NotConnectedError:
                 self.__handle_not_connected()
         else:
+            # Raise or handle?
             raise self.Exceptions.NotConnectedError
 
     def __handle_notification(self, handle, raw_data):
@@ -278,19 +282,35 @@ class SimpleBlePeriphDev(SimplePeriphDev):
     def internal_error_handler(self, code, message):
         logging.error('Device "{}": an internal error has occurred: {}'.format(self, message))
 
+    def __request_state_when_comes_online(self):
+        """
+        Designed to be called by __init_parameters. Blocks until 'STATE' message is sent to the device
+        :return:
+        """
+        success = False
+        while not success:
+            self.online.wait()
+            try:
+                self.__send_text('STATE')
+                success = True
+            except self.Exceptions.NotConnectedError:
+                self.__handle_not_connected()
+
     def __init_parameters(self, blocking=True):
         """
         Tells the BLE device to send information about each of its characteristics' state
-        :param blocking: if True, blocks until all the parameters are initialized, else just send a request
+        :param blocking: if True, blocks until all the parameters are initialized,
         :return:
         """
-        try:
-            self.__send_text('STATE')
-        except self.Exceptions.NotConnectedError:
-            self.__handle_not_connected()
-        # Event will be set in the notification handler
-        if blocking:
+        # Request is sent only when device comes online
+        if not blocking:
+            thread = threading.Thread(target=self.__request_state_when_comes_online, daemon=True)
+            thread.start()
+        else:
+            self.__request_state_when_comes_online()
+            # 'Initialized' event will be set in the notification handler
             self.parameters_initialized.wait()
+
 
     def __connect_no_timeout(self):
         """
