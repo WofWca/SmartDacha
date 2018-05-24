@@ -181,16 +181,20 @@
 
 				if (JSON.parse(param_html.getAttribute('controllable'))) {
 					// Get parameter command html
-					param_curr_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
+					param_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
 						".parameter_curr_command")
 					// New parameter command must be opposite to its new current state.
 					if (new_state_index == 0) {
-						param_curr_command_html.innerText =
-							param_curr_command_html.getAttribute('command_1_localized')
+						param_command_html.setAttribute('curr_command',
+							param_command_html.getAttribute('command_1'))
+						param_command_html.innerText =
+							param_command_html.getAttribute('command_1_localized')
 					}
 					else {
-						param_curr_command_html.innerText =
-							param_curr_command_html.getAttribute('command_0_localized')
+						param_command_html.setAttribute('curr_command',
+							param_command_html.getAttribute('command_0'))
+						param_command_html.innerText =
+							param_command_html.getAttribute('command_0_localized')
 					}
 				}
 			}
@@ -204,8 +208,8 @@
 			command_xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
 			// Information about device and parameter may aswell be obtained through button.parentElement.
 			command_xhr.send('{ "target": "' + button.getAttribute('device') +
-				'", "param": "' + button.getAttribute('param') + '", "command": "' +
-				button.getAttribute('command') + '" }');
+				'", "parameter": "' + button.getAttribute('param') + '", "command": "' +
+				button.getAttribute('curr_command') + '" }');
 		}
 	</script>
 

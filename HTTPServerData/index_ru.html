@@ -10,8 +10,6 @@
 		}
 
 		.control_panel {
-			margin: auto;
-			vertical-align: middle;
 			max-width: 500px;
 		}
 
@@ -94,7 +92,9 @@
 				if (this.readyState == 4)
 					if (this.status == 200) {
 						// initial state data is received.
-						update_ui(JSON.parse(this.responseText));
+						initial_data = JSON.parse(this.responseText)
+						last_update_time = initial_data.time
+						update_ui(initial_data);
 					}
 					else {
 						console.error('Error loading initial state data. Server responded: ' + this.status)
@@ -181,16 +181,20 @@
 
 				if (JSON.parse(param_html.getAttribute('controllable'))) {
 					// Get parameter command html
-					param_curr_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
+					param_command_html = param_html.querySelector(".parameter_curr_state_and_command " +
 						".parameter_curr_command")
 					// New parameter command must be opposite to its new current state.
 					if (new_state_index == 0) {
-						param_curr_command_html.innerText =
-							param_curr_command_html.getAttribute('command_1_localized')
+						param_command_html.setAttribute('curr_command',
+							param_command_html.getAttribute('command_1'))
+						param_command_html.innerText =
+							param_command_html.getAttribute('command_1_localized')
 					}
 					else {
-						param_curr_command_html.innerText =
-							param_curr_command_html.getAttribute('command_0_localized')
+						param_command_html.setAttribute('curr_command',
+							param_command_html.getAttribute('command_0'))
+						param_command_html.innerText =
+							param_command_html.getAttribute('command_0_localized')
 					}
 				}
 			}
@@ -203,9 +207,9 @@
 			command_xhr.open('POST', '/command');
 			command_xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
 			// Information about device and parameter may aswell be obtained through button.parentElement.
-			command_xhr.send('{ "device": "' + button.getAttribute('device') +
-				'", "param": "' + button.getAttribute('param') + '", "command": "' +
-				button.getAttribute('command') + '" }');
+			command_xhr.send('{ "target": "' + button.getAttribute('device') +
+				'", "parameter": "' + button.getAttribute('param') + '", "command": "' +
+				button.getAttribute('curr_command') + '" }');
 		}
 	</script>
 

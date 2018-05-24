@@ -28,7 +28,7 @@ def run_http_server():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logging.getLogger('pygatt').setLevel(logging.CRITICAL)
     # logging.disable(logging.WARNING)
     logging.logProcesses = 0
@@ -64,18 +64,6 @@ if __name__ == '__main__':
                                                    ble_adapter=ble_adapters[i])
         periph_devices[periph_devices_descriptions[i]['name']] = new_ble_periph_device
 
-        if new_ble_periph_device.online == False:
-            logging.warning('Connection to %s failed', new_ble_periph_device)
-        else:
-            logging.info('Successfully connected to %s', new_ble_periph_device)
-
-    num_devices_online = 0
-    for curr_dev in periph_devices.values():
-        if curr_dev.online:
-            num_devices_online += 1
-    logging.info('Peripheral devices configuration complete: %d/%d online',
-                 num_devices_online, len(periph_devices))
-
     # Controller init
     controller = Controller(periph_devices, periph_devices_descriptions, controller_config_file_name)
 
@@ -85,12 +73,13 @@ if __name__ == '__main__':
     http_server.user_command_callback = controller.handle_user_command
     http_server_thread = threading.Thread(target=run_http_server, daemon=True)
     http_server_thread.start()
-    logging.debug('HTTP server started')
+    logging.info('HTTP server started')
 
     # Main cycle
-    logging.debug('Running main cycle')
+    logging.info('Running main cycle')
     while True:
         time.sleep(retry_connection_delay)
+        """
         # Retry connecting to devices that are offline
         for curr_dev in periph_devices.values():
             if curr_dev.online == False:
@@ -99,3 +88,4 @@ if __name__ == '__main__':
                     logging.info('%s connection retry succeeded', curr_dev)
                 else:
                     logging.debug('%s connection retry failed', curr_dev)
+        """

@@ -39,7 +39,8 @@ class Controller:
                  controller_config_file_name: str):
         # self.config_file_name = controller_config_file_name
         self.periph_devices = periph_devices
-        self.pump_dev = self.periph_devices['well_and_tank']
+        self.well_tank_dev = self.periph_devices['well_and_tank']
+        self.greenhouse_dev = self.periph_devices['greenhouse']
         # Telling devices to send notification to this controller then requesting their states
         # Their responses will be handled in a different function
         for curr_dev in self.periph_devices.values():
@@ -68,6 +69,33 @@ class Controller:
             command = json.loads(command_text)
         except json.JSONDecodeError:
             self.error_callback('Could not parse user command')
+            return
+
+        target = command.get('target', None)
+        parameter = command.get('parameter', None)
+        command = command.get('command', None)
+        if target == 'controller':
+            pass
+        elif target == 'well_and_tank':
+            # if the pump is controlled automatically, user command has no effect
+            with self.config_lock:
+                is_auto = self.config['pump_auto_control']
+            if is_auto:
+                self.error_callback('Attempted to execute a manual command on an automated parameter')
+                return
+            if parameter == 'pump':
+                # Find parameter description
+                for curr_param in self.well_tank_dev.description['parameters']:
+                    if curr_param['name'] == 'pump':
+                        break
+                if (command != curr_param['commands'][0]) and \
+                        (command != curr_param['commands'][1]):
+                    self.error_callback('Invalid value {}:{}:{}'.format(target, parameter, command))
+                    return
+                self.well_tank_dev.send_command(parameter, command)
+            else:
+                self.error_callback("Cannot control {}'s parameter {}".format(target, parameter))
+                return
 
     def handle_device_parameter_update(self, device: SimplePeriphDev, parameter, value):
         """
@@ -94,14 +122,15 @@ class Controller:
         :param device: Device which send that notification
         :return:
         """
+        pass
 
-
-    def handle_update(self, update):
+    def handle_updates(self, update):
         """
         Called when something changes its parameters (e.g. controller config or device)
         :param update: Update JSON-formatted data (not string, JSON-like Python data structure)
         :return:
         """
+        self.__manage_pump()
 
     def __default_update_callback(self, update_data):
         logging.warning("Controller's default device parameter updated callback called")
@@ -111,7 +140,7 @@ class Controller:
 
     # Automation functions are followed. Consider moving logic into config-file
 
-    def manage_pump(self):
+    def __manage_pump(self):
         """
         Analyzes the current parameters of the system and controller config and manages pump according to it
         :return:
@@ -128,26 +157,25 @@ class Controller:
                     pass
                 else:
                     # Pump is normally on.
+                    pump_parameters = self.well_tank_dev.parameters
                     if self.config['pump_auto_control_turn_off_when_well_empty']:
-                        with self.pump_dev.lock:
-                            if self.pump_dev.parameters['well_water_presence'] == 'not_present':
-                                # No water in the well
-                                self.pump_dev.set_parameter('pump', 'turn_off')
-                            else:
-                                # Water in the well is present
-                                if self.config['pump_auto_control_turn_off_when_tank_full']:
-                                    if self.pump_dev.parameters['tank'] == 'full':
-                                        self.pump_dev.set_parameter('pump', 'turn_off')
-                                    else:
-                                        self.pump_dev.set_parameter('pump', 'turn_on')
+                        if pump_parameters ['well_water_presence'] == 'not_present':
+                            # No water in the well
+                            self.well_tank_dev.send_command('pump', 'turn_off')
+                        else:
+                            # Water in the well is present
+                            if self.config['pump_auto_control_turn_off_when_tank_full']:
+                                if pump_parameters['tank'] == 'full':
+                                    self.well_tank_dev.send_command('pump', 'turn_off')
+                                else:
+                                    self.well_tank_dev.send_command('pump', 'turn_on')
                     else:
                         # Do not turn off the pump if the well is empty
-                        with self.pump_dev.lock:
-                            if self.config['pump_auto_control_turn_off_when_tank_full']:
-                                if self.pump_dev.parameters['tank'] == 'full':
-                                    self.pump_dev.set_parameter('pump', 'turn_off')
-                                else:
-                                    self.pump_dev.set_parameter('pump', 'turn_on')
+                        if self.config['pump_auto_control_turn_off_when_tank_full']:
+                            if pump_parameters ['tank'] == 'full':
+                                self.well_tank_dev.send_command('pump', 'turn_off')
                             else:
-                                # Do not trun off the pump when the tank is full
-                                self.pump_dev.set_parameter('pump', 'turn_on')
+                                self.well_tank_dev.send_command('pump', 'turn_on')
+                        else:
+                            # Do not trun off the pump when the tank is full
+                            self.well_tank_dev.send_command('pump', 'turn_on')

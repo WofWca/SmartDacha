@@ -1,6 +1,7 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from threading import Event, Lock
+import SimplePeriphDev
 import logging
 import json
 import Controller
@@ -39,7 +40,7 @@ class CustomHTTPServer(ThreadingMixIn, HTTPServer):
         self.device_parameter_updated_event.set()
         self.device_parameter_updated_event.clear()
 
-    def default_user_command_callback(self, target, parameter, command):
+    def default_user_command_callback(self, command_text):
         logging.warning('Default user command callback handler called')
 
 
@@ -100,12 +101,11 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                 state_copy['controller_config'] = copy.deepcopy(self.server.controller.config)
             # Reading devices' information
             for curr_dev_name, curr_dev in self.server.controller.periph_devices.items():
-                with curr_dev.lock:
-                    state_copy['devices'].append({
-                        'name': curr_dev_name,
-                        'online': curr_dev.online,
-                        'parameters': copy.deepcopy(curr_dev.parameters)
-                    })
+                state_copy['devices'].append({
+                    'name': curr_dev_name,
+                    'online': curr_dev.online.is_set(),
+                    'parameters': copy.deepcopy(curr_dev.parameters)
+                })
             # Stingifying gathered data and sending it to the client
             self.wfile.write(bytes(json.dumps(state_copy, indent='\t'), self.server.encoding))
         elif self.path == '/favicon.ico':
@@ -134,9 +134,10 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
             # Read last update time
             try:
                 client_last_update_time = float(self.rfile.read(int(self.headers['Content-Length'])))
-            except:
+            except ValueError:
                 # Incorrect format
                 self.send_error(400)
+                return
             # If the client did not receive the latest update yet
             self.server.updates_buffer_lock.acquire()
             # noinspection PyUnboundLocalVariable
@@ -162,7 +163,8 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                     update_to_send = self.server.updates_buffer[-1]
             self.wfile.write(bytes(json.dumps(update_to_send), self.server.encoding))
         elif self.path == '/command':
-            self.server.user_command_callback(self.rfile.read(int(self.headers['Content-Length'])))
+            self.server.user_command_callback(str(self.rfile.read(int(self.headers['Content-Length'])),
+                                                  self.server.encoding))
             self.send_response(200)
             self.end_headers()
             self.wfile.write(bytes('Command transferred', self.server.encoding))
