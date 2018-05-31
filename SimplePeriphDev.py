@@ -167,7 +167,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         logging.info('PeriphDev %s notif raw: "%s"', self, raw_string)
         curr_message_start = 0
         while curr_message_start < len(raw_string):
-            terminal_pos = raw_string.find('.', curr_message_start)
+            terminal_pos = raw_string.find(';', curr_message_start)
             if terminal_pos == -1:
                 # No message end found. Buffering
                 # Check whether max buffer length is exceeded
