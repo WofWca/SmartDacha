@@ -137,11 +137,11 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         :param text:
         :return:
         """
-        # '\r\n' is a termination symbol
+        # ';' is a termination symbol
         if self.online.is_set():
             try:
                 self.__conn.char_write(uuid=self.bleModuleSerialCharUUID,
-                                       value=str.encode(text + '\r\n', encoding='ASCII'),
+                                       value=str.encode(text + ';', encoding='ASCII'),
                                        wait_for_response=True)
                 logging.debug('To dev {} sent "{}"'.format(self, text))
             except pygatt.exceptions.NotConnectedError:
@@ -155,7 +155,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         Called by pygatt when a BLE device sends a notification. Therefore it is not possible that this method is called
         by multiple threads (if it is used right). If the device sends a long message, this method will be called
         multiple times consequently and the message is going to be transmitted by parts.
-        Threrefore we're using end of transmission symbol - '\n'. Also we're using self.__notification_buffer
+        Threrefore we're using end of transmission symbol - ';'. Also we're using self.__notification_buffer
 
         :param handle:
         :param raw_data:
@@ -167,7 +167,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         logging.info('PeriphDev %s notif raw: "%s"', self, raw_string)
         curr_message_start = 0
         while curr_message_start < len(raw_string):
-            terminal_pos = raw_string.find('\n', curr_message_start)
+            terminal_pos = raw_string.find('.', curr_message_start)
             if terminal_pos == -1:
                 # No message end found. Buffering
                 # Check whether max buffer length is exceeded
