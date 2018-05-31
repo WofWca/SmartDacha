@@ -45,7 +45,7 @@ class SimplePeriphDev:
 
     @property
     def parameters(self):
-        raise  NotImplementedError
+        raise NotImplementedError
 
     # Sends ASCII text to the device.
     def __send_text(self, text: str):
@@ -155,7 +155,7 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         Called by pygatt when a BLE device sends a notification. Therefore it is not possible that this method is called
         by multiple threads (if it is used right). If the device sends a long message, this method will be called
         multiple times consequently and the message is going to be transmitted by parts.
-        Threrefore we're using end of transmission symbol - '\r\n'. Also we're using self.__notification_buffer
+        Threrefore we're using end of transmission symbol - '\n'. Also we're using self.__notification_buffer
 
         :param handle:
         :param raw_data:
@@ -164,10 +164,10 @@ class SimpleBlePeriphDev(SimplePeriphDev):
         max_buffer_length = 256
         # Consider locking less code <efficiency>
         raw_string = raw_data.decode('ASCII')
-        logging.debug('PeriphDev {} notif raw: "{}"'.format(self, raw_string))
+        logging.info('PeriphDev %s notif raw: "%s"', self, raw_string)
         curr_message_start = 0
         while curr_message_start < len(raw_string):
-            terminal_pos = raw_string.find('\r\n', curr_message_start)
+            terminal_pos = raw_string.find('\n', curr_message_start)
             if terminal_pos == -1:
                 # No message end found. Buffering
                 # Check whether max buffer length is exceeded
@@ -179,9 +179,10 @@ class SimpleBlePeriphDev(SimplePeriphDev):
                 # Stop processing this string
                 break
             else:
-                # Found a message termianl
+                # Found a message termianal symbol
                 self.__handle_message(self.__message_buffer + raw_string[curr_message_start:terminal_pos])
-                curr_message_start = terminal_pos + 2
+                # Omitting terminal symbol
+                curr_message_start = terminal_pos + 1
                 self.__message_buffer = ''
 
     def __handle_message(self, message: str):

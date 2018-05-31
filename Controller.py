@@ -93,6 +93,8 @@ class Controller:
                     self.error_callback('Invalid value {}:{}:{}'.format(target, parameter, command))
                     return
                 self.well_tank_dev.send_command(parameter, command)
+                # No need to call handle_updates as there are no updates yet - the device has not confirmed that its
+                # state has changed
             else:
                 self.error_callback("Cannot control {}'s parameter {}".format(target, parameter))
                 return
@@ -114,6 +116,7 @@ class Controller:
             }],
             'controller_config': {}
         }
+        self.handle_updates(update_data)
         self.update_callback(update_data)
 
     def handle_device_error(self, device: SimplePeriphDev):

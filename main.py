@@ -39,6 +39,10 @@ if __name__ == '__main__':
 
     # Forming the main page from template
     template = Template(open(main_page_template_file_name).read())
+    curr_locale = 'en'
+    open('{}_{}.html'.format(main_page_file_name_template, curr_locale), 'w').write(template.render(
+        {'periph_devices_descriptions': periph_devices_descriptions,
+         'locale': curr_locale}))
     curr_locale = 'ru'
     open('{}_{}.html'.format(main_page_file_name_template, curr_locale), 'w').write(template.render(
         {'periph_devices_descriptions': periph_devices_descriptions,
@@ -71,15 +75,16 @@ if __name__ == '__main__':
     http_server = CustomHTTPServer(http_server_address, main_page_file_name_template, favicon_file_name, controller)
     controller.update_callback = http_server.parameter_update_handler
     http_server.user_command_callback = controller.handle_user_command
-    http_server_thread = threading.Thread(target=run_http_server, daemon=True)
-    http_server_thread.start()
-    logging.info('HTTP server started')
+    logging.info('Running HTTP server')
+    http_server.serve_forever()
+    # http_server_thread = threading.Thread(target=run_http_server, daemon=False)
+    # http_server_thread.start()
 
     # Main cycle
-    logging.info('Running main cycle')
-    while True:
-        time.sleep(retry_connection_delay)
-        """
+    # logging.info('Initialization complete')
+    """
+    # while True:
+        # time.sleep(retry_connection_delay)
         # Retry connecting to devices that are offline
         for curr_dev in periph_devices.values():
             if curr_dev.online == False:
@@ -88,4 +93,4 @@ if __name__ == '__main__':
                     logging.info('%s connection retry succeeded', curr_dev)
                 else:
                     logging.debug('%s connection retry failed', curr_dev)
-        """
+    """
